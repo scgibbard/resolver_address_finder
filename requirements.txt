@@ -1,1 +1,2 @@
 dnslib==0.9.23
+netifaces==0.11.0
