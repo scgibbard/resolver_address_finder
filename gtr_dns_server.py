@@ -23,8 +23,9 @@ class DomainName(str):
 		return DomainName(item + '.' + self)
 
 
-D = DomainName('example.com.')
-IP = '127.0.0.1'
+resolver_finder_hostname = 'resolver-ip-address.globaltraceroute.com.'
+D = DomainName(resolver_finder_hostname)
+IP = '127.0.0.5'
 TTL = 60 * 5
 
 soa_record = SOA(
@@ -48,7 +49,7 @@ records = {
 }
 
 
-def dns_response(data):
+def dns_response(data, client_address):
 	request = DNSRecord.parse(data)
 
 	print(request)
@@ -67,6 +68,8 @@ def dns_response(data):
 				for rdata in rrs:
 					rqt = rdata.__class__.__name__
 					if qt in ['*', rqt]:
+						if qname == resolver_finder_hostname:
+							rdata = A(client_address)
 						reply.add_answer(RR(rname=qname, rtype=getattr(QTYPE, rqt), rclass=1, ttl=TTL, rdata=rdata))
 
 		for rdata in ns_records:
@@ -94,7 +97,7 @@ class BaseRequestHandler(socketserver.BaseRequestHandler):
 		try:
 			data = self.get_data()
 			print(len(data), data)  # repr(data).replace('\\x', '')[1:-1]
-			self.send_data(dns_response(data))
+			self.send_data(dns_response(data, self.client_address[0]))
 		except Exception:
 			traceback.print_exc(file=sys.stderr)
 
