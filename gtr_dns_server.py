@@ -11,6 +11,7 @@ import threading
 import traceback
 import socketserver
 import struct
+import netifaces as ni
 try:
 	from dnslib import *
 except ImportError:
@@ -133,15 +134,24 @@ def main():
 	parser.add_argument('--port', default=5053, type=int, help='The port to listen on.')
 	parser.add_argument('--tcp', action='store_true', help='Listen to TCP connections.')
 	parser.add_argument('--udp', action='store_true', help='Listen to UDP datagrams.')
+	parser.add_argument('--interface', default='eth0', help='Ethernet interface to listen on.')
 	
 	args = parser.parse_args()
 	if not (args.udp or args.tcp): parser.error("Please select at least one of --udp or --tcp.")
 
 	print("Starting nameserver...")
 
+	"""Get IP address to bind to"""
+	if args.interface in ni.interfaces():
+		ipv4_address = ni.ifaddresses(args.interface)[ni.AF_INET][0]['addr']
+		ipv6_address = ni.ifaddresses(args.interface)[ni.AF_INET6][0]['addr'].split('%')[0]
+
 	servers = []
-	if args.udp: servers.append(socketserver.ThreadingUDPServer(('', args.port), UDPRequestHandler))
-	if args.tcp: servers.append(socketserver.ThreadingTCPServer(('', args.port), TCPRequestHandler))
+	for ip_address in [ipv4_address]: #, ipv6_address]:
+		print('%s, udp' % ip_address)
+		if args.udp: servers.append(socketserver.ThreadingUDPServer((ip_address, args.port), UDPRequestHandler))
+		print('%s, tcp' % ip_address)
+		if args.tcp: servers.append(socketserver.ThreadingTCPServer((ip_address, args.port), TCPRequestHandler))
 
 	for s in servers:
 		thread = threading.Thread(target=s.serve_forever)  # that thread will start one more thread for each request
