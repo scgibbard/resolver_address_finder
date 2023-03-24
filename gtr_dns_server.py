@@ -23,31 +23,57 @@ class DomainName(str):
 	def __getattr__(self, item):
 		return DomainName(item + '.' + self)
 
-
+"""Make this handle multiple records"""
 resolver_finder_hostname = 'resolver-ip-address.globaltraceroute.com.'
-D = DomainName(resolver_finder_hostname)
-IP = '127.0.0.5'
-TTL = 60 * 5
-
-soa_record = SOA(
-	mname=D.ns1,  # primary name server
-	rname=D.andrei,  # email of the domain administrator
-	times=(
-		201307231,  # serial number
-		60 * 60 * 1,  # refresh
-		60 * 60 * 3,  # retry
-		60 * 60 * 24,  # expire
-		60 * 60 * 1,  # minimum
+hostnames = [ 
+	{
+		'name': resolver_finder_hostname,
+		'address': '127.0.0.5',
+	},
+]
+name_servers = [
+	{
+		'name': 'gtr-ns1.globaltraceroute.com.',
+		'address': '52.70.90.34',
+	},
+	{
+		'name': 'gtr-ns2.globaltraceroute.com.',
+		'address': '72.44.50.212',
+	}
+]
+for hostname in hostnames:
+	D = DomainName(hostname['name'])
+	hostname['D'] = D
+	IP = hostname['address']
+	hostname['IP'] = IP
+	TTL = 60
+	hostname['TTL'] = TTL
+	
+	soa_record = SOA(
+		mname=DomainName(name_servers[0]['name']),  # primary name server
+		rname=DomainName('support.globaltraceroute.com.'),  # email of the domain administrator
+		times=(
+			201307231,  # serial number
+			60 * 60 * 1,  # refresh
+			60 * 60 * 3,  # retry
+			60 * 60 * 24,  # expire
+			60 * 60 * 1,  # minimum
+		)
 	)
-)
-ns_records = [NS(D.ns1), NS(D.ns2)]
-records = {
-	D: [A(IP), AAAA((0,) * 16), MX(D.mail), soa_record] + ns_records,
-	D.ns1: [A(IP)],  # MX and NS records must never point to a CNAME alias (RFC 2181 section 10.3)
-	D.ns2: [A(IP)],
-	D.mail: [A(IP)],
-	D.andrei: [CNAME(D)],
-}
+	hostname['soa_record'] = soa_record
+	#ns_records = [NS(DomainName('-ns1.globaltraceroute.com.')), NS(DomainName('gtr-ns2.globaltraceroute.com.'))]
+	ns_records = []
+	for name_server in name_servers:
+		ns_records.append(NS(DomainName(name_server['name'])))
+	hostname['ns_records'] = ns_records
+	records = {
+		D: [A(IP), AAAA((0,) * 16), soa_record] + ns_records,
+		#D.ns1: [A(IP)],  # MX and NS records must never point to a CNAME alias (RFC 2181 section 10.3)
+		#D.ns2: [A(IP)],
+		#D.mail: [A(IP)],
+		#D.andrei: [CNAME(D)],
+	}
+	hostname['records'] = records
 
 
 def dns_response(data, client_address):
@@ -62,25 +88,27 @@ def dns_response(data, client_address):
 	qtype = request.q.qtype
 	qt = QTYPE[qtype]
 
-	if qn == D or qn.endswith('.' + D):
+	for hostname in hostnames:
+		if qn == hostname['D'] or qn.endswith('.' + hostname['D']):
+	
+			for name, rrs in hostname['records'].items():
+				if name == qn:
+					for rdata in rrs:
+						rqt = rdata.__class__.__name__
+						if qt in ['*', rqt]:
+							if qname == resolver_finder_hostname:
+								rdata = A(client_address)
+							reply.add_answer(RR(rname=qname, rtype=getattr(QTYPE, rqt), rclass=1, ttl=TTL, rdata=rdata))
+	
+			for rdata in hostname['ns_records']:
+				reply.add_ar(RR(rname=D, rtype=QTYPE.NS, rclass=1, ttl=hostname['TTL'], rdata=rdata))
+	
+			reply.add_auth(RR(rname=D, rtype=QTYPE.SOA, rclass=1, ttl=hostname['TTL'], rdata=soa_record))
+	
+		print("---- Reply:\n", reply)
+	
+		return reply.pack()
 
-		for name, rrs in records.items():
-			if name == qn:
-				for rdata in rrs:
-					rqt = rdata.__class__.__name__
-					if qt in ['*', rqt]:
-						if qname == resolver_finder_hostname:
-							rdata = A(client_address)
-						reply.add_answer(RR(rname=qname, rtype=getattr(QTYPE, rqt), rclass=1, ttl=TTL, rdata=rdata))
-
-		for rdata in ns_records:
-			reply.add_ar(RR(rname=D, rtype=QTYPE.NS, rclass=1, ttl=TTL, rdata=rdata))
-
-		reply.add_auth(RR(rname=D, rtype=QTYPE.SOA, rclass=1, ttl=TTL, rdata=soa_record))
-
-	print("---- Reply:\n", reply)
-
-	return reply.pack()
 
 
 class BaseRequestHandler(socketserver.BaseRequestHandler):
