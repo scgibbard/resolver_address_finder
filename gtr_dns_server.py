@@ -84,7 +84,7 @@ def dns_response(data, client_address):
 	reply = DNSRecord(DNSHeader(id=request.header.id, qr=1, aa=1, ra=1), q=request.q)
 
 	qname = request.q.qname
-	qn = str(qname)
+	qn = str(qname).lower()
 	qtype = request.q.qtype
 	qt = QTYPE[qtype]
 
@@ -96,7 +96,7 @@ def dns_response(data, client_address):
 					for rdata in rrs:
 						rqt = rdata.__class__.__name__
 						if qt in ['*', rqt]:
-							if qname == resolver_finder_hostname:
+							if qn == resolver_finder_hostname:
 								rdata = A(client_address)
 							reply.add_answer(RR(rname=qname, rtype=getattr(QTYPE, rqt), rclass=1, ttl=TTL, rdata=rdata))
 	
