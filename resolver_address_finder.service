@@ -1,0 +1,9 @@
+[Unit]
+Description=Fake DNS server that returns the address of the client's resolver
+
+[Service]
+ExecStart=/home/gtrace/resolver_address_finder/virt/bin/python /home/gtrace/resolver_address_finder/gtr_dns_server.py --port 53 --tcp --udp
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
