@@ -36,10 +36,10 @@ name_servers = [
 		'name': 'gtr-ns1.globaltraceroute.com.',
 		'address': '52.70.90.34',
 	},
-	#{
-	#	'name': 'gtr-ns2.globaltraceroute.com.',
-	#	'address': '72.44.50.212',
-	#}
+	{
+		'name': 'gtr-ns2.globaltraceroute.com.',
+		'address': '72.44.50.212',
+	}
 ]
 for hostname in hostnames:
 	D = DomainName(hostname['name'])
