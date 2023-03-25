@@ -88,6 +88,7 @@ def dns_response(data, client_address):
 	qtype = request.q.qtype
 	qt = QTYPE[qtype]
 
+	got_answer = False
 	for hostname in hostnames:
 		if qn == hostname['D'] or qn.endswith('.' + hostname['D']):
 	
@@ -96,15 +97,22 @@ def dns_response(data, client_address):
 					for rdata in rrs:
 						rqt = rdata.__class__.__name__
 						if qt in ['*', rqt]:
-							if qn == resolver_finder_hostname:
+							if qn == resolver_finder_hostname and rqt == 'A':
 								rdata = A(client_address)
+								got_answer = True
 							reply.add_answer(RR(rname=qname, rtype=getattr(QTYPE, rqt), rclass=1, ttl=TTL, rdata=rdata))
+							got_answer = True
 	
 			for rdata in hostname['ns_records']:
 				reply.add_ar(RR(rname=D, rtype=QTYPE.NS, rclass=1, ttl=hostname['TTL'], rdata=rdata))
 	
-			reply.add_auth(RR(rname=D, rtype=QTYPE.SOA, rclass=1, ttl=hostname['TTL'], rdata=soa_record))
-	
+			if not got_answer:
+				reply.header.rcode = getattr(RCODE,'NXDOMAIN')
+				got_answer = True
+			
+		if not got_answer:
+			print('replying SERVFAIL')
+			reply.header.rcode = getattr(RCODE,'SERVFAIL')
 		print("---- Reply:\n", reply)
 	
 		return reply.pack()
