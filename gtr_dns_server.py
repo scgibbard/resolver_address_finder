@@ -28,10 +28,17 @@ class DomainName(str):
 
 """Make this handle multiple records"""
 resolver_finder_hostname = 'resolver-ip-address.globaltraceroute.com.'
+resolver_finder_v6_hostname = 'resolver-ipv6-address.globaltraceroute.com.'
 hostnames = [ 
 	{
 		'name': resolver_finder_hostname,
 		'address': '127.0.0.5',
+		'address6': '1::2',
+	},
+	{
+		'name': resolver_finder_v6_hostname,
+		'address': '127.0.0.4',
+		'address6': '1::1',
 	},
 ]
 name_servers = [
@@ -49,6 +56,8 @@ for hostname in hostnames:
 	hostname['D'] = D
 	IP = hostname['address']
 	hostname['IP'] = IP
+	IP6 = hostname['address6']
+	hostname['IP6'] = IP6
 	TTL = 60
 	hostname['TTL'] = TTL
 	
@@ -70,7 +79,7 @@ for hostname in hostnames:
 		ns_records.append(NS(DomainName(name_server['name'])))
 	hostname['ns_records'] = ns_records
 	records = {
-		D: [A(IP), AAAA((0,) * 16), soa_record] + ns_records,
+		D: [A(IP), AAAA(IP6), soa_record] + ns_records,
 		#D.ns1: [A(IP)],  # MX and NS records must never point to a CNAME alias (RFC 2181 section 10.3)
 		#D.ns2: [A(IP)],
 		#D.mail: [A(IP)],
@@ -93,43 +102,74 @@ def dns_response(data, client_address):
 
 	got_answer = False
 	should_servfail = False
+	print(hostnames)
 	for hostname in hostnames:
+		print('in hostname loop')
+		print(qn)
+		print(hostname['D'])
 		if qn == hostname['D'] or qn.endswith('.' + hostname['D']):
+			print('in if')
 	
 			for name, rrs in hostname['records'].items():
+				print('in for')
 				if name == qn:
+					print('in if name == qn')
 					for rdata in rrs:
+						print('in rdata for loop')
 						rqt = rdata.__class__.__name__
 						if qt in ['*', rqt]:
-							if qn == resolver_finder_hostname and rqt == 'A':
-								if type(ipaddress.ip_address(client_address)) == ipaddress.IPv4Address:
-									rdata = A(client_address)
-									got_answer = True
+							print('in qt in *')
+							print(qn)
+							print(resolver_finder_hostname)
+							print(resolver_finder_v6_hostname)
+							if qn == resolver_finder_hostname:
+								print('qn is resolver_finder_hostname')
+								if rqt == 'A':
+									print('found a record')
+									if type(ipaddress.ip_address(client_address)) == ipaddress.IPv4Address:
+										rdata = A(client_address)
+										got_answer = True
+									else: 
+										should_servfail = True
+										print("Rejecting not V4")
 								else: 
 									should_servfail = True
-							elif qn == resolver_finder_hostname and rqt == 'AAAA':
-								if type(ipaddress.ip_address(client_address)) == ipaddress.IPv6Address:
-									rdata = AAAA(client_address)
-									got_answer = True
+									print("Rejecting not V4")
+							elif qn == resolver_finder_v6_hostname:
+								print('qn is resolver_finder_v6_hostname')
+								if rqt == 'AAAA':
+									print('found aaaa record')
+									if type(ipaddress.ip_address(client_address)) == ipaddress.IPv6Address:
+										rdata = AAAA(client_address)
+										got_answer = True
+									else: 
+										should_servfail = True
+										print("Rejecting not V6")
 								else: 
 									should_servfail = True
-							reply.add_answer(RR(rname=qname, rtype=getattr(QTYPE, rqt), rclass=1, ttl=TTL, rdata=rdata))
+									print("Rejecting not V6")
+							print('at reply.add_answer')
 							if not should_servfail:
+								reply.add_answer(RR(rname=qname, rtype=getattr(QTYPE, rqt), rclass=1, ttl=TTL, rdata=rdata))
+							if not should_servfail:
+								print('not should_servfail')
 								got_answer = True
 	
 			for rdata in hostname['ns_records']:
 				reply.add_ar(RR(rname=D, rtype=QTYPE.NS, rclass=1, ttl=hostname['TTL'], rdata=rdata))
-	
+		    
+			print('checking got_answer and should_servfail')
 			if not got_answer and not should_servfail:
 				reply.header.rcode = getattr(RCODE,'NXDOMAIN')
 				got_answer = True
 			
-		if not got_answer:
-			print('replying SERVFAIL')
-			reply.header.rcode = getattr(RCODE,'SERVFAIL')
-		print("---- Reply:\n", reply)
+	if not got_answer:
+		print('not got_answer')
+		print('replying SERVFAIL')
+		reply.header.rcode = getattr(RCODE,'SERVFAIL')
+	print("---- Reply:\n", reply)
 	
-		return reply.pack()
+	return reply.pack()
 
 
 
