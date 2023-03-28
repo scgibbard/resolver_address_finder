@@ -92,6 +92,7 @@ def dns_response(data, client_address):
 	qt = QTYPE[qtype]
 
 	got_answer = False
+	should_servfail = False
 	for hostname in hostnames:
 		if qn == hostname['D'] or qn.endswith('.' + hostname['D']):
 	
@@ -104,17 +105,22 @@ def dns_response(data, client_address):
 								if type(ipaddress.ip_address(client_address)) == ipaddress.IPv4Address:
 									rdata = A(client_address)
 									got_answer = True
+								else: 
+									should_servfail = True
 							elif qn == resolver_finder_hostname and rqt == 'AAAA':
 								if type(ipaddress.ip_address(client_address)) == ipaddress.IPv6Address:
 									rdata = AAAA(client_address)
 									got_answer = True
+								else: 
+									should_servfail = True
 							reply.add_answer(RR(rname=qname, rtype=getattr(QTYPE, rqt), rclass=1, ttl=TTL, rdata=rdata))
-							got_answer = True
+							if not should_servfail:
+								got_answer = True
 	
 			for rdata in hostname['ns_records']:
 				reply.add_ar(RR(rname=D, rtype=QTYPE.NS, rclass=1, ttl=hostname['TTL'], rdata=rdata))
 	
-			if not got_answer:
+			if not got_answer and not should_servfail:
 				reply.header.rcode = getattr(RCODE,'NXDOMAIN')
 				got_answer = True
 			
