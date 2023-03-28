@@ -12,6 +12,8 @@ import traceback
 import socketserver
 import struct
 import netifaces as ni
+import socket
+
 try:
 	from dnslib import *
 except ImportError:
@@ -163,6 +165,13 @@ class UDPRequestHandler(BaseRequestHandler):
 	def send_data(self, data):
 		return self.request[1].sendto(data, self.client_address)
 
+class V6ThreadingUDPServer(socketserver.ThreadingUDPServer):
+	address_family = socket.AF_INET6
+	IPV6_V6ONLY = True
+
+class V6ThreadingTCPServer(socketserver.ThreadingTCPServer):
+	address_family = socket.AF_INET6
+	IPV6_V6ONLY = True
 
 def main():
 	parser = argparse.ArgumentParser(description='Start a DNS implemented in Python.')
@@ -171,6 +180,7 @@ def main():
 	parser.add_argument('--tcp', action='store_true', help='Listen to TCP connections.')
 	parser.add_argument('--udp', action='store_true', help='Listen to UDP datagrams.')
 	parser.add_argument('--interface', default='eth0', help='Ethernet interface to listen on.')
+	parser.add_argument('--ipv6', action='store_true', help='Listen on IPv6')
 	
 	args = parser.parse_args()
 	if not (args.udp or args.tcp): parser.error("Please select at least one of --udp or --tcp.")
@@ -183,11 +193,19 @@ def main():
 		ipv6_address = ni.ifaddresses(args.interface)[ni.AF_INET6][0]['addr'].split('%')[0]
 
 	servers = []
-	for ip_address in [ipv4_address, ipv6_address]:
-		print('%s, udp' % ip_address)
-		if args.udp: servers.append(socketserver.ThreadingUDPServer((ip_address, args.port), UDPRequestHandler))
-		print('%s, tcp' % ip_address)
-		if args.tcp: servers.append(socketserver.ThreadingTCPServer((ip_address, args.port), TCPRequestHandler))
+	if args.udp: 
+		print('%s, udp' % ipv4_address)
+		servers.append(socketserver.ThreadingUDPServer((ipv4_address, args.port), UDPRequestHandler))
+		if args.ipv6:
+			print('%s, udp' % ipv6_address)
+			servers.append(V6ThreadingUDPServer((ipv6_address, args.port), UDPRequestHandler))
+
+	if args.tcp: 
+		print('%s, tcp' % ipv4_address)
+		servers.append(socketserver.ThreadingTCPServer((ipv4_address, args.port), TCPRequestHandler))
+		if args.ipv6:
+			print('%s, tcp' % ipv6_address)
+			servers.append(V6ThreadingTCPServer((ipv6_address, args.port), TCPRequestHandler))
 
 	for s in servers:
 		thread = threading.Thread(target=s.serve_forever)  # that thread will start one more thread for each request
