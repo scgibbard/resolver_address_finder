@@ -13,6 +13,7 @@ import socketserver
 import struct
 import netifaces as ni
 import socket
+import ipaddress
 
 try:
 	from dnslib import *
@@ -100,8 +101,13 @@ def dns_response(data, client_address):
 						rqt = rdata.__class__.__name__
 						if qt in ['*', rqt]:
 							if qn == resolver_finder_hostname and rqt == 'A':
-								rdata = A(client_address)
-								got_answer = True
+								if type(ipaddress.ip_address(client_address)) == ipaddress.IPv4Address:
+									rdata = A(client_address)
+									got_answer = True
+							elif qn == resolver_finder_hostname and rqt == 'AAAA':
+								if type(ipaddress.ip_address(client_address)) == ipaddress.IPv6Address:
+									rdata = AAAA(client_address)
+									got_answer = True
 							reply.add_answer(RR(rname=qname, rtype=getattr(QTYPE, rqt), rclass=1, ttl=TTL, rdata=rdata))
 							got_answer = True
 	
