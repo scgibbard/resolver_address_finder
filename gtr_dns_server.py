@@ -183,7 +183,7 @@ def main():
 		ipv6_address = ni.ifaddresses(args.interface)[ni.AF_INET6][0]['addr'].split('%')[0]
 
 	servers = []
-	for ip_address in [ipv4_address]: #, ipv6_address]:
+	for ip_address in [ipv4_address, ipv6_address]:
 		print('%s, udp' % ip_address)
 		if args.udp: servers.append(socketserver.ThreadingUDPServer((ip_address, args.port), UDPRequestHandler))
 		print('%s, tcp' % ip_address)
